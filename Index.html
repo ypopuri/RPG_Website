@@ -67,7 +67,7 @@
             scene.add(directionalLight);
 
             // Load the 3D character model (placeholder GLTF model)
-            loader.load('assets/models/your-character.glb', function (gltf) {
+            loader.load('assets/models/robot.glb', function (gltf) {
                 character = gltf.scene;
                 character.scale.set(0.75, 0.75, 0.75);  
                 character.position.set(0, groundHeight, 0);  // Ensure character starts on the ground
