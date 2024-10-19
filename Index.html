@@ -3,23 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D RPG with Anime House</title>
+    <title>3D RPG with Popup Animation</title>
     <style>
         body { margin: 0; }
         canvas { display: block; }
+
+        /* Popup with fade-in/out animations */
+        .popup {
+            display: none;  /* Initially hidden */
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: white;
+            padding: 20px;
+            border: 2px solid #000;
+            z-index: 10;
+            opacity: 0;  /* Fully transparent initially */
+            transition: opacity 0.5s ease;  /* Smooth transition */
+        }
+
+        .popup.show {
+            display: block;
+            opacity: 1;  /* Fully opaque when shown */
+        }
+
+        .popup.hide {
+            opacity: 0;  /* Fully transparent for hiding */
+        }
+
+        .popup button {
+            margin: 5px;
+        }
     </style>
 </head>
 <body>
+    <!-- Popup Modal -->
+    <div id="popup" class="popup">
+        <p>Do you want to visit our journey page?</p>
+        <button onclick="visitJourney()">Yes</button>
+        <button onclick="closePopup()">No</button>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
     <script>
-        let scene, camera, renderer, character;
+        let scene, camera, renderer, character, animeHouse, door, houseBox;
         let moveForward = false, moveBackward = false, moveLeft = false, moveRight = false;
         let velocity = 0.1;  // Character movement speed
         let pitch = 0, yaw = 0;  // Camera angles for yaw and pitch
         let isPointerLocked = false;  // Pointer lock status
 
         const groundHeight = 0;  // Ground plane height
+        let doorOpened = false;  // Track door status
+        const doorOpenThreshold = 5;  // Distance threshold for opening/closing the door
+        let insideHouse = false;  // Track if the character is inside the house
+
+        // Placeholder for house dimensions (will be calculated based on actual model)
+        let houseMin, houseMax;
 
         function init() {
             // Create the scene
@@ -39,15 +80,6 @@
             floor.position.y = groundHeight;  // Ground level
             scene.add(floor);
 
-            // Load the anime-style house model
-            const loader = new THREE.GLTFLoader();
-            loader.load('path/to/your/anime-house-model.glb', function (gltf) {  // <-- Replace with your anime house model link
-                const animeHouse = gltf.scene;
-                animeHouse.scale.set(5, 5, 5);  // Adjust scale to make it visible (can be modified)
-                animeHouse.position.set(50, groundHeight, -50);  // Adjust position to make it closer
-                scene.add(animeHouse);
-            });
-
             // Set up the camera
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(0, 5, 10);  // Position behind and above the character
@@ -57,6 +89,39 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
+            // Load the robot character model and reduce its size
+            const loader = new THREE.GLTFLoader();
+            loader.load('assets/models/robot.glb', function (gltf) {  // <-- Loading robot character model
+                character = gltf.scene;
+                character.scale.set(0.5, 0.5, 0.5);  // Reduced size of the robot
+                character.position.set(0, groundHeight, 0);  // Starting position
+                scene.add(character);
+            });
+
+            // Create a simple door (aligned to the house)
+            const doorGeometry = new THREE.BoxGeometry(2, 5, 0.2);  // Door dimensions
+            const doorMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 });  // Wooden door color
+            door = new THREE.Mesh(doorGeometry, doorMaterial);
+            door.position.set(5.5, 2, -25);  // Move the door farther out from the house
+            door.scale.set(0.90, 0.70, 0.75);  // Reduce the door size by 75%
+            door.rotation.y = Math.PI / 2;  // Rotate the door 90 degrees initially
+            scene.add(door);
+
+            // Load the anime-style house model in front of the character
+            loader.load('assets/models/house1.glb', function (gltf) {  // <-- Loading the anime-style house
+                animeHouse = gltf.scene;
+                animeHouse.scale.set(5, 5, 5);  // Adjust scale to make it visible
+                animeHouse.position.set(0, groundHeight, -30);  // Place it in front of the character
+                scene.add(animeHouse);
+
+                // Compute house bounding box for room entry
+                const houseBox = new THREE.Box3().setFromObject(animeHouse);
+                houseMin = houseBox.min;
+                houseMax = houseBox.max;
+
+                console.log("House bounding box:", houseMin, houseMax);  // Debugging
+            });
+
             // Add ambient light
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
             scene.add(ambientLight);
@@ -65,14 +130,6 @@
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
             directionalLight.position.set(10, 10, 10).normalize();
             scene.add(directionalLight);
-
-            // Load the 3D character model (placeholder GLTF model)
-            loader.load('assets/models/robot.glb', function (gltf) {
-                character = gltf.scene;
-                character.scale.set(0.75, 0.75, 0.75);  
-                character.position.set(0, groundHeight, 0);  // Ensure character starts on the ground
-                scene.add(character);
-            });
 
             // Add event listeners for keyboard and mouse input
             document.addEventListener('keydown', onKeyDown);
@@ -87,6 +144,7 @@
             document.addEventListener('pointerlockchange', onPointerLockChange);
             document.addEventListener('mousemove', onMouseMove);  // Track mouse movement
 
+            // Start rendering and animating immediately
             animate();
         }
 
@@ -139,6 +197,11 @@
 
                 // Clamp pitch to avoid flipping the camera upside down
                 pitch = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, pitch));
+
+                // Make character face the same direction as the camera
+                if (character) {
+                    character.rotation.y = yaw;  // Sync the character's rotation with the camera yaw
+                }
             }
         }
 
@@ -157,7 +220,14 @@
             }
             if (moveRight) {
                 character.translateX(-velocity);  // Strafe right in negative X direction
+
             }
+
+            // Open/Close the door based on distance
+            checkDoorDistance();
+            
+            // Trigger popup when character enters or exits the house
+            checkRoomEntry();
 
             // Apply camera rotation (yaw and pitch) based on mouse movement
             const offset = new THREE.Vector3(0, 5, -10);  // Adjusted offset behind the character
@@ -167,6 +237,65 @@
             // Set camera position and look at the character
             camera.position.copy(character.position).add(offset);
             camera.lookAt(character.position);
+        }
+
+        function checkDoorDistance() {
+            if (character && door) {
+                const distance = character.position.distanceTo(door.position);
+                if (distance < doorOpenThreshold && !doorOpened) {
+                    // Open the door by rotating it
+                    door.rotation.y = Math.PI;  // Rotate the door 90 degrees further to simulate opening
+                    doorOpened = true;  // Mark the door as opened
+                    console.log("Door opened!");
+                } else if (distance >= doorOpenThreshold && doorOpened) {
+                    // Close the door by resetting its rotation
+                    door.rotation.y = Math.PI / 2;  // Rotate the door back to its 90-degree position
+                    doorOpened = false;  // Mark the door as closed
+                    console.log("Door closed!");
+                }
+            }
+        }
+
+        // Function to check if the character enters or exits the house (using bounding box)
+        function checkRoomEntry() {
+            if (character && houseMin && houseMax) {
+                const charPos = character.position;
+                const isInside = charPos.x > houseMin.x && charPos.x < houseMax.x &&
+                                 charPos.y > houseMin.y && charPos.y < houseMax.y &&
+                                 charPos.z > houseMin.z && charPos.z < houseMax.z;
+
+                // Show popup if inside the house, hide it if outside
+                if (isInside && !insideHouse) {
+                    insideHouse = true;
+                    showPopup();
+                } else if (!isInside && insideHouse) {
+                    insideHouse = false;
+                    closePopup();
+                }
+            }
+        }
+
+        function showPopup() {
+            const popup = document.getElementById('popup');
+            popup.style.display = 'block';  // Ensure popup is shown
+            setTimeout(() => {
+                popup.classList.add('show');  // Start the fade-in animation
+                popup.classList.remove('hide');  // Remove hide class (reset)
+            }, 10);  // Small delay to allow CSS transition
+        }
+
+        function closePopup() {
+            const popup = document.getElementById('popup');
+            popup.classList.remove('show');  // Start the fade-out animation
+            popup.classList.add('hide');
+            setTimeout(() => {
+                popup.style.display = 'none';  // Ensure the popup is fully hidden after the animation
+            }, 500);  // Ensure the fade-out transition completes before hiding
+        }
+
+        function visitJourney() {
+            // Redirect to the journey page (you can replace with actual journey URL)
+            window.location.href = 'https://your-journey-page-url.com';
         }
 
         function animate() {
