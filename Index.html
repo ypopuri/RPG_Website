@@ -3,12 +3,32 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D RPG with Popup Animation</title>
+    <title>3D RPG with Popup and Blurred Background</title>
     <style>
-        body { margin: 0; }
-        canvas { display: block; }
+        /* Remove margin and padding from the body and html to eliminate white space */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden; /* Ensure no scrollbars */
+        }
 
-        /* Popup with fade-in/out animations */
+        /* Ensure the content wrapper takes up the full screen */
+        .content-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Ensure the canvas fills the entire screen */
+        canvas {
+            display: block;  /* Remove inline-block space */
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Style for popup with fade-in/out animations */
         .popup {
             display: none;  /* Initially hidden */
             position: fixed;
@@ -35,9 +55,20 @@
         .popup button {
             margin: 5px;
         }
+
+        /* Style to blur the background when popup is visible */
+        .blurred {
+            filter: blur(5px);
+            transition: filter 0.5s ease;  /* Smooth blur transition */
+        }
     </style>
 </head>
 <body>
+    <!-- Wrapper for all the background content (scene and 3D objects) -->
+    <div id="content-wrapper" class="content-wrapper">
+        <!-- Canvas for rendering the 3D scene -->
+    </div>
+
     <!-- Popup Modal -->
     <div id="popup" class="popup">
         <p>Do you want to visit our journey page?</p>
@@ -67,6 +98,15 @@
             scene = new THREE.Scene();
             scene.background = new THREE.Color(0x87CEEB);  // Sky blue background
 
+            // Set up the renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('content-wrapper').appendChild(renderer.domElement);
+
+            // Set up the camera
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);  // Position behind and above the character
+
             // Add a ground plane (basic flat ground)
             const textureLoader = new THREE.TextureLoader();
             const groundTexture = textureLoader.load('https://threejsfundamentals.org/threejs/resources/images/checker.png');  // Basic checker texture for testing
@@ -79,15 +119,6 @@
             floor.rotation.x = - Math.PI / 2;  // Rotate to lay flat
             floor.position.y = groundHeight;  // Ground level
             scene.add(floor);
-
-            // Set up the camera
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.set(0, 5, 10);  // Position behind and above the character
-
-            // Set up the renderer
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            document.body.appendChild(renderer.domElement);
 
             // Load the robot character model and reduce its size
             const loader = new THREE.GLTFLoader();
@@ -282,6 +313,9 @@
                 popup.classList.add('show');  // Start the fade-in animation
                 popup.classList.remove('hide');  // Remove hide class (reset)
             }, 10);  // Small delay to allow CSS transition
+
+            // Apply blur to the content wrapper (excluding popup)
+            document.getElementById('content-wrapper').classList.add('blurred');
         }
 
         function closePopup() {
@@ -291,6 +325,9 @@
             setTimeout(() => {
                 popup.style.display = 'none';  // Ensure the popup is fully hidden after the animation
             }, 500);  // Ensure the fade-out transition completes before hiding
+
+            // Remove blur from the background content
+            document.getElementById('content-wrapper').classList.remove('blurred');
         }
 
         function visitJourney() {
